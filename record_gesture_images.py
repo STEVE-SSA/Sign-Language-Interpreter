@@ -3,8 +3,8 @@ import os
 import time
 
 # === CUSTOMIZE HERE ===
-GESTURE_NAME = "water"      # Change this for each gesture
-USER_ID = "steve"          # Change to "user2" for second person
+GESTURE_NAME = "help"      # Change this for each gesture
+USER_ID = "Bhoomi"          # Change to "user2" for second person
 NUM_SAMPLES = 50
 CAPTURE_INTERVAL = 0.5     # Time in seconds between captures
 SAVE_DIR = f"datasets/custom_gestures/{GESTURE_NAME}"
