@@ -6,8 +6,8 @@ import numpy as np
 import json
 
 # === USER CONFIGURATION ===
-GESTURE_NAME = "water"      # Set the gesture name here
-USER_ID = "Bhoomi"            # Set your user name here
+GESTURE_NAME = "stop"      # Set the gesture name here
+USER_ID = "Steve"            # Set your user name here
 NUM_SEQUENCES = 30             # Number of sequences to record
 SEQUENCE_LENGTH = 30           # Frames per sequence
 SAVE_DIR = f"datasets/sequences/{GESTURE_NAME}"
