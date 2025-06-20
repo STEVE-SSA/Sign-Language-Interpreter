@@ -78,7 +78,62 @@ while cap.isOpened():
         # Pad if only one hand detected
         if results.multi_hand_landmarks and len(results.multi_hand_landmarks) == 1:
             keypoints.extend([0.0] * (21 * 3))
-        buffer.append(keypoints)
+        # --- Advanced feature extraction for real-time inference ---
+        def calculate_angle(a, b, c):
+            a = np.array(a)
+            b = np.array(b)
+            c = np.array(c)
+            ba = a - b
+            bc = c - b
+            cosine_angle = np.dot(ba, bc) / (np.linalg.norm(ba) * np.linalg.norm(bc) + 1e-6)
+            angle = np.arccos(np.clip(cosine_angle, -1.0, 1.0))
+            return np.degrees(angle)
+        def calculate_distances(hand):
+            wrist = hand[0]
+            fingertips = [hand[i] for i in [4,8,12,16,20]]
+            return [np.linalg.norm(f - wrist) for f in fingertips]
+        def calculate_palm_orientation(hand):
+            v1 = hand[5] - hand[0]
+            v2 = hand[17] - hand[0]
+            normal = np.cross(v1, v2)
+            norm = np.linalg.norm(normal)
+            return normal / (norm + 1e-6)
+        def normalize_hand(hand):
+            wrist = hand[0]
+            normed = hand - wrist
+            scale = np.linalg.norm(hand[12] - wrist) + 1e-6
+            return normed / scale
+        angle_indices = [
+            (0, 1, 2), (1, 2, 3), (2, 3, 4),
+            (0, 5, 6), (5, 6, 7), (6, 7, 8),
+            (0, 9, 10), (9, 10, 11), (10, 11, 12),
+            (0, 13, 14), (13, 14, 15), (14, 15, 16),
+            (0, 17, 18), (17, 18, 19), (18, 19, 20)
+        ]
+        keypoints_np = np.array(keypoints).reshape(2, 21, 3)
+        all_features = []
+        for hand in keypoints_np:
+            normed_hand = normalize_hand(hand)
+            # Angles
+            angles = [calculate_angle(normed_hand[idxs[0]], normed_hand[idxs[1]], normed_hand[idxs[2]]) for idxs in angle_indices]
+            # Distances
+            distances = calculate_distances(normed_hand)
+            # Palm orientation
+            palm_orient = calculate_palm_orientation(normed_hand)
+            # Concatenate all features for this hand
+            all_features.extend(normed_hand.flatten())
+            all_features.extend(angles)
+            all_features.extend(distances)
+            all_features.extend(palm_orient)
+        buffer.append(np.array(all_features))
+        # --- Temporal smoothing: apply moving average to buffer if enough frames ---
+        if len(buffer) >= 3:
+            arr = np.array(buffer)
+            kernel = np.ones((3,))/3
+            smoothed = np.vstack([np.convolve(arr[:,i], kernel, mode='same') for i in range(arr.shape[1])]).T
+            # Replace last frame with its smoothed version
+            buffer[-1] = smoothed[-1]
+
         cv2.putText(frame, f"Recording gesture... ({len(buffer)}/{SEQ_LEN})", (30, 60), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 0), 2)
         cv2.imshow("Sequence Gesture Inference", frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):

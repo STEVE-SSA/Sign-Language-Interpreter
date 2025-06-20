@@ -1,6 +1,8 @@
-0,call
-1,eat
-2,help
-3,me
-4,sorry
-5,water
+0,I
+1,call
+2,eat
+3,help
+4,me
+5,walk
+6,want
+7,water

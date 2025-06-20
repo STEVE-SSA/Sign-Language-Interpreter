@@ -19,7 +19,7 @@ input_dim = X_train.shape[2]
 
 # Model definition (LSTM-based)
 model = tf.keras.Sequential([
-    tf.keras.layers.Masking(mask_value=0.0, input_shape=(seq_len, input_dim)),
+    tf.keras.layers.Masking(mask_value=0.0, input_shape=(seq_len, input_dim)),  # input_dim now includes angles
     tf.keras.layers.LSTM(128, return_sequences=True),
     tf.keras.layers.LSTM(64),
     tf.keras.layers.Dense(64, activation='relu'),
