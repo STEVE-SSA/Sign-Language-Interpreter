@@ -6,7 +6,7 @@ import numpy as np
 import json
 
 # === USER CONFIGURATION ===
-GESTURE_NAME = "walk"      # Set the gesture name here
+GESTURE_NAME = "Thankyou"      # Set the gesture name here
 USER_ID = "Bhoomi"            # Set your user name here
 NUM_SEQUENCES = 30             # Number of sequences to record
 SEQUENCE_LENGTH = 30           # Frames per sequence

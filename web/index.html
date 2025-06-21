@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Language Interpreter</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f7f7fa;
+        }
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+        .left {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #222;
+        }
+        .right {
+            flex: 1;
+            padding: 40px 32px;
+            background: #fff;
+            box-shadow: -2px 0 8px rgba(0,0,0,0.04);
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+        }
+        #webcam {
+            width: 480px;
+            height: 480px;
+            max-width: 480px;
+            max-height: 480px;
+            border-radius: 16px;
+            box-shadow: 0 4px 32px rgba(0,0,0,0.13);
+            border: 4px solid #fff;
+            background: #000;
+            transform: scaleX(-1); /* Mirror horizontally */
+        }
+        h2 {
+            margin-top: 0;
+            color: #2d2d2d;
+        }
+        #detected-signs {
+            margin-top: 32px;
+            font-size: 1.5rem;
+            color: #444;
+            min-height: 2em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="left">
+            <video id="webcam" autoplay playsinline></video>
+        </div>
+        <div class="right">
+            <h2>Detected Sign</h2>
+            <div id="countdown" style="font-size:2rem;color:#c00;margin-bottom:24px;"></div>
+            <div id="detected-signs">No sign detected yet.</div>
+        </div>
+    </div>
+    <script>
+        // Webcam stream setup
+        const video = document.getElementById('webcam');
+        const detectedSigns = document.getElementById('detected-signs');
+        const countdownDiv = document.getElementById('countdown');
+        let streaming = false;
+        let detecting = false;
+        let pauseTimeout = null;
+        let detectionLoopId = null;
+
+        // Create overlay canvas for box
+        const overlay = document.createElement('canvas');
+        overlay.width = 480;
+        overlay.height = 480;
+        overlay.style.position = 'absolute';
+        overlay.style.left = video.offsetLeft + 'px';
+        overlay.style.top = video.offsetTop + 'px';
+        overlay.style.pointerEvents = 'none';
+        overlay.style.width = video.style.width || '480px';
+        overlay.style.height = video.style.height || '480px';
+        document.querySelector('.left').appendChild(overlay);
+
+        function drawBox() {
+            const ctx = overlay.getContext('2d');
+            ctx.clearRect(0, 0, overlay.width, overlay.height);
+            const boxSize = 300;
+            const boxX = overlay.width/2 - boxSize/2;
+            const boxY = overlay.height/2 - boxSize/2;
+            ctx.strokeStyle = '#0f0';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(boxX, boxY, boxSize, boxSize);
+        }
+
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                video.srcObject = stream;
+                streaming = true;
+                video.addEventListener('playing', () => {
+                    drawBox();
+                    startCountdown();
+                });
+            })
+            .catch(err => {
+                detectedSigns.innerText = 'Could not access webcam.';
+            });
+
+        function startCountdown() {
+            let count = 3;
+            detectedSigns.innerText = 'No sign detected yet.';
+            countdownDiv.innerText = `Starting in ${count}...`;
+            detecting = false;
+            function tick() {
+                count--;
+                if (count > 0) {
+                    countdownDiv.innerText = `Starting in ${count}...`;
+                    setTimeout(tick, 1000);
+                } else {
+                    countdownDiv.innerText = '';
+                    detecting = true;
+                    startDetectionLoop();
+                }
+            }
+            setTimeout(tick, 1000);
+        }
+
+        function startDetectionLoop() {
+            detectionLoopId = setInterval(captureAndSendFrame, 200);
+        }
+
+        function stopDetectionLoop() {
+            if (detectionLoopId) clearInterval(detectionLoopId);
+            detectionLoopId = null;
+        }
+
+        async function captureAndSendFrame() {
+            if (!streaming || !detecting) return;
+            try {
+                // Wait for video to be ready and have valid size
+                let vw = video.videoWidth;
+                let vh = video.videoHeight;
+                if (!vw || !vh || vw === 0 || vh === 0) {
+                    // Try again soon
+                    setTimeout(captureAndSendFrame, 100);
+                    return;
+                }
+                // Create a canvas to capture the current frame
+                const canvas = document.createElement('canvas');
+                canvas.width = vw;
+                canvas.height = vh;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0, vw, vh);
+                // Convert to blob
+                const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.9));
+                if (!blob) {
+                    detectedSigns.innerText = 'Camera not ready, retrying...';
+                    setTimeout(captureAndSendFrame, 100);
+                    return;
+                }
+                // Send to backend
+                const formData = new FormData();
+                formData.append('file', blob, 'frame.jpg');
+                const response = await fetch('http://127.0.0.1:8000/predict', {
+                    method: 'POST',
+                    body: formData
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.prediction) {
+                        detectedSigns.innerText = `${data.prediction} (${(data.confidence*100).toFixed(1)}%)`;
+                        detecting = false;
+                        stopDetectionLoop();
+                        countdownDiv.innerText = 'Pausing...';
+                        pauseTimeout = setTimeout(() => {
+                            startCountdown();
+                        }, 5000); // 5s pause
+                    } else {
+                        detectedSigns.innerText = 'Detecting...';
+                    }
+                } else {
+                    detectedSigns.innerText = 'Backend error.';
+                }
+            } catch (e) {
+                detectedSigns.innerText = 'Camera or backend not ready, retrying...';
+                setTimeout(captureAndSendFrame, 200);
+            }
+        }
+    </script>
+</body>
+</html>
